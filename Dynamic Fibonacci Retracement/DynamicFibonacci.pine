@@ -1,0 +1,84 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © HoanGhetti
+
+//@version=5
+indicator("Dynamic Fibonacci Retracement [HG]", overlay = true)
+
+input_lookback  = input.int(defval = 50, title = 'Lookback Range', minval = 5)
+input_extend    = input.string(defval = 'None', title = 'Extend', options = ['None', 'Right', 'Left', 'Both'])
+input_width     = input.int(defval = 1, title = 'Width', minval = 0)
+input_labels    = input.bool(defval = true, title = 'Labels', inline = 'Labels')
+input_offset    = input.int(defval = 5, title = '| Offset Right', inline = 'Labels')
+input_prices    = input.bool(defval = false, title = 'Prices', tooltip = 'Prints the price of the level next to the retracement level.')
+input_bullColor = input.color(defval = color.green, title = 'Bull', inline = 'color')
+input_bearColor = input.color(defval = color.red, title = 'Bear', inline = 'color')
+input_trendline = input.bool(defval = true, title = 'Use Trendline', group = 'Levels')
+input_use236    = input.bool(defval = true, title = '', inline = '0', group = 'Levels')
+input_236       = input.float(defval = 0.236, title = '', inline = '0', group = 'Levels', step = 0.01)
+input_use382    = input.bool(defval = true, title = '', inline = '382', group = 'Levels')
+input_382       = input.float(defval = 0.382, title = '', inline = '382', group = 'Levels', step = 0.01)
+input_use5      = input.bool(defval = true, title = '', inline = '382', group = 'Levels')
+input_5         = input.float(defval = 0.5, title = '', inline = '382', group = 'Levels', step = 0.01)
+input_use618    = input.bool(defval = true, title = '', inline = '618', group = 'Levels')
+input_618       = input.float(defval = 0.618, title = '', inline = '618', group = 'Levels', step = 0.01)
+input_use786    = input.bool(defval = true, title = '', inline = '618', group = 'Levels')
+input_786       = input.float(defval = 0.786, title = '', inline = '618', group = 'Levels', step = 0.01)
+
+exType = switch input_extend
+    'None' => extend.none
+    'Right' => extend.right
+    'Left' => extend.left
+    'Both' => extend.both
+
+pl = fixnan(ta.pivotlow(input_lookback, input_lookback))
+ph = fixnan(ta.pivothigh(input_lookback, input_lookback))
+plC = ta.barssince(ta.change(pl))
+phC = ta.barssince(ta.change(ph))
+
+var string dir = na
+since = phC < plC ? plC + input_lookback : phC + input_lookback
+if ta.change(ph) or ta.crossunder(low, pl)
+    dir := 'bear'
+if ta.change(pl) or ta.crossover(high, ph)
+    dir := 'bull'
+col = dir == 'bull' ? input_bullColor : input_bearColor
+
+getOuter(pivot, src) =>
+    var srcValue = src
+    if ta.change(pivot)
+        srcValue := pivot
+    if pivot == ph ? src > srcValue : src < srcValue
+        srcValue := src
+    [srcValue]
+
+[h] = getOuter(ph, high)
+[l] = getOuter(pl, low)
+
+calcFib(float lo, float hi, float perc) => dir == 'bull' ? lo - (lo - hi) * perc : hi - (hi - lo) * perc
+
+levelsArr = array.from(0, input_use236 ? input_236 : na, input_use382 ? input_382 : na, input_use5 ? input_5 : na, input_use618 ? input_618 : na, input_use786 ? input_786 : na, 1)
+var trendline  = line.new(na, na, na, na, style = line.style_dashed, width = input_width)
+var innerLines = array.new<line>()
+for i = 0 to 6
+    if innerLines.size() < 7
+        innerLines.push(line.new(na, na, na, na, width = input_width))
+    innerLines.get(i).set_xy1(bar_index - since, calcFib(l, h, levelsArr.get(i)))
+    innerLines.get(i).set_xy2(bar_index, calcFib(l, h, levelsArr.get(i)))
+    innerLines.get(i).set_color(col)
+    innerLines.get(i).set_extend(exType)
+    if input_labels
+        var labelArray = array.new<label>()
+        if labelArray.size() < 7
+            labelArray.push(label.new(na, na, na, style = label.style_none))
+        labelArray.get(i).set_xy(bar_index + input_offset, calcFib(l, h, levelsArr.get(i)))
+        labelArray.get(i).set_text(str.tostring(levelsArr.get(i)) + (input_prices ? ' (' + str.tostring(calcFib(l, h, levelsArr.get(i)), format.mintick) + ')' : na))
+        labelArray.get(i).set_textcolor(col)    
+
+if input_trendline
+    if dir == 'bull'
+        trendline.set_xy1(bar_index - since, l)
+        trendline.set_xy2(bar_index, h)
+    else
+        trendline.set_xy1(bar_index - since, h)
+        trendline.set_xy2(bar_index, l)
+trendline.set_color(col)

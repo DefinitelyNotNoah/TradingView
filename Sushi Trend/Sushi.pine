@@ -1,0 +1,50 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © HoanGhetti
+
+//@version=5
+indicator("Sushi Trend [HG]", overlay = true)
+
+factor = input.int(defval = 5, title = 'Engulfing Factor')
+bullC  = input.color(defval = color.green, title = 'Bull')
+bearC  = input.color(defval = color.red, title = 'Bear')
+var stMatrix = matrix.new<float>(4, factor)
+
+setMinMax(float value, int row, bool set = false) =>
+    bool result = na
+    for i = 0 to factor - 1
+        if set
+            int j = factor + i
+            stMatrix.set(0, i, high[i])
+            stMatrix.set(1, i, low[i])
+            stMatrix.set(2, i, high[j])
+            stMatrix.set(3, i, low[j])
+        if value == stMatrix.get(row, i)
+            result := true
+            break
+    result
+
+setMinMax(na, na, true)
+bool max = setMinMax(stMatrix.max(), 0)
+bool min = setMinMax(stMatrix.min(), 1)
+bool valid = min and max and (stMatrix.min() == stMatrix.get(1, factor - 1) or stMatrix.max() == stMatrix.get(0,  factor - 1))
+bool sushi = valid and ta.barssince(valid[1]) >= factor and barstate.isconfirmed
+
+float lastMax = fixnan(ta.change(sushi) and sushi and max ? stMatrix.max() : na)
+float lastMin = fixnan(ta.change(sushi) and sushi ? stMatrix.min() : na)
+var int direction = na
+
+if ta.crossover(close, lastMax)
+    direction := 1
+if ta.crossunder(close, lastMin)
+    direction := 0
+
+float sushiTrend = switch direction
+    1 => lastMin
+    0 => lastMax
+
+color dirColor = direction == 1 ? bullC : bearC
+stPlot = plot(sushiTrend, title = 'Sushi Trend', color = not ta.change(direction) ? dirColor : na, linewidth = 3, style = plot.style_linebr)
+hlPlot = plot(hl2, display = display.none, editable = false)
+fill(stPlot, hlPlot, color.new(dirColor, 90))
+plotshape(ta.change(direction) and direction == 1 ? sushiTrend : na, title = 'Bull', style = shape.labelup, color = dirColor, location = location.absolute, text = 'Bull', textcolor = color.white, size = size.tiny)
+plotshape(ta.change(direction) and direction == 0 ? sushiTrend : na, title = 'Bear', style = shape.labeldown, color = dirColor, location = location.absolute, text = 'Bear', textcolor = color.white, size = size.tiny)
